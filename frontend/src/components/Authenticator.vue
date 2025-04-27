@@ -1,9 +1,11 @@
 <script setup>
 import { ref, onMounted, computed, onUnmounted, nextTick } from 'vue';
-import {GetSecretsList, InsertSecret} from '../../wailsjs/go/main/App';
+import {GetSecretsList, InsertSecret, DeleteSecret, RecognizeQRCode} from '../../wailsjs/go/main/App';
 import ConfirmationDialog from './ConfirmationDialog.vue';
 import ManualEntryDialog from './ManualEntryDialog.vue';
 import AddOptionsMenu from './AddOptionsMenu.vue';
+import QrCodeUploadDialog from './QrCodeUploadDialog.vue';
+import NotificationDialog from './NotificationDialog.vue';
 
 // --- 状态 ---
 const accounts = ref([]);
@@ -13,6 +15,31 @@ const accounts = ref([]);
 function calculateTimeLeft() {
     const nowSeconds = Math.floor(Date.now() / 1000);
     return 30 - (nowSeconds % 30);
+}
+
+// --- 通知弹窗状态 ---
+const notification = ref({
+  show: false,
+  type: 'info',
+  title: '',
+  message: '',
+  buttonText: '确定'
+});
+
+// 显示通知弹窗
+function showNotification(type, title, message, buttonText = '确定') {
+  notification.value = {
+    show: true,
+    type,
+    title,
+    message,
+    buttonText
+  };
+}
+
+// 关闭通知弹窗
+function closeNotification() {
+  notification.value.show = false;
 }
 
 // 获取账户列表
@@ -25,6 +52,7 @@ const getSecretsList = async () => {
   } catch (error) {
     console.error('获取账户列表时出错:', error);
     accounts.value = [];
+    showNotification('error', '错误', '获取账户列表时出错');
   }
 };
 
@@ -66,7 +94,10 @@ const confirmationMessage = ref(''); // 对话框消息
 // --- 添加账户菜单和对话框状态 ---
 const showAddOptions = ref(false); // 是否显示添加选项菜单
 const showManualEntryDialog = ref(false); // 是否显示手动添加对话框
+const showQrCodeDialog = ref(false); // 是否显示二维码扫描对话框
+const qrCodeDialogRef = ref(null); // 二维码上传对话框引用
 const addButtonPosition = ref(null); // 添加按钮位置
+const qrCodeImageData = ref(null); // 二维码图片数据
 
 // --- 事件处理 ---
 // 处理条目交互开始（鼠标按下或触摸开始）
@@ -155,19 +186,16 @@ async function deleteSelectedAccounts() {
   console.log(`尝试删除账户，ID: ${idsToDelete.join(', ')}`);
 
   try {
-    // --- 替换为实际的 Go 后端调用 ---
-    // 你可能需要一个新的后端函数来接受 ID 数组
-    // 示例: await window.go.main.App.DeleteSecrets(idsToDelete);
-    console.log(`模拟成功删除 ID: ${idsToDelete.join(', ')}`); // 模拟成功
-    // --- Go 后端调用结束 ---
-
-    // 如果删除成功，从前端列表中移除账户
-    accounts.value = accounts.value.filter(acc => !selectedAccountIds.value.has(acc.ID));
-    console.log(`账户 ${idsToDelete.join(', ')} 已从前端列表移除。`);
-
+    // 调用Go后端的DeleteSecret方法删除账户
+    await DeleteSecret(idsToDelete);
+    console.log(`成功删除账户，ID: ${idsToDelete.join(', ')}`);
+    
+    // 刷新账户列表，确保显示最新数据
+    await getSecretsList();
+    
   } catch (error) {
     console.error(`删除账户 ${idsToDelete.join(', ')} 时出错:`, error);
-    alert(`删除账户时出错: ${error}`); // 简单的错误反馈
+    showNotification('error', '错误', `删除账户时出错: ${error}`);
   } finally {
      // 删除尝试后退出选择模式
      cancelSelectionMode();
@@ -211,8 +239,8 @@ function handleAddOptionSelect(option) {
     // 显示手动添加对话框
     showManualEntryDialog.value = true;
   } else if (option === 'scan') {
-    // TODO: 实现图片解析功能
-    console.log('选择了解析图片，但功能尚未实现');
+    // 显示二维码扫描对话框
+    showQrCodeDialog.value = true;
   }
 }
 
@@ -242,13 +270,61 @@ async function handleManualAdd(formData) {
     
   } catch (error) {
     console.error('添加账户失败:', error);
-    alert(`添加账户失败: ${error}`);
+    showNotification('error', '错误', `添加账户失败: ${error}`);
   }
 }
 
 // 关闭手动添加对话框
 function closeManualEntryDialog() {
   showManualEntryDialog.value = false;
+}
+
+// 关闭二维码扫描对话框
+function closeQrCodeDialog() {
+  showQrCodeDialog.value = false;
+  qrCodeImageData.value = null;
+}
+
+// 处理二维码检测事件
+async function handleQrCodeDetected(data) {
+  console.log('检测到二维码图片数据，长度:', data.length);
+  
+  try {
+    // 设置处理状态（通过引用调用组件方法）
+    if (qrCodeDialogRef.value) {
+      // 这里不关闭状态，因为需要等待后端处理完成
+    }
+    
+    // 直接传递图像数据数组，不需要额外处理
+    await RecognizeQRCode(data);
+    
+    // 显示成功提示
+    showNotification('success', '成功', '二维码识别成功，账户已添加');
+    
+    // 检测成功后刷新账户列表
+    await getSecretsList();
+    
+    // 重置处理状态
+    if (qrCodeDialogRef.value) {
+      qrCodeDialogRef.value.resetProcessingState();
+    }
+    
+    // 关闭对话框
+    showQrCodeDialog.value = false;
+    
+  } catch (error) {
+    console.error('二维码识别失败:', error);
+    
+    // 设置错误状态
+    if (qrCodeDialogRef.value) {
+      qrCodeDialogRef.value.setProcessingError(error);
+    }
+    
+    // 显示错误通知
+    showNotification('error', '错误', `二维码识别失败: ${error}`);
+    
+    // 注意：不关闭对话框，让用户可以重试
+  }
 }
 
 // --- TOTP 计时器逻辑 ---
@@ -382,6 +458,14 @@ const getProgressStyle = (timeLeft) => {
       @cancel="closeManualEntryDialog"
     />
 
+    <!-- 二维码上传对话框 -->
+    <QrCodeUploadDialog
+      ref="qrCodeDialogRef"
+      :show="showQrCodeDialog"
+      @qrcode-detected="handleQrCodeDetected"
+      @close="closeQrCodeDialog"
+    />
+
     <!-- 确认对话框 -->
     <ConfirmationDialog
       v-if="showDeleteConfirmation"
@@ -390,6 +474,16 @@ const getProgressStyle = (timeLeft) => {
       confirmText="删除"
       @confirm="deleteSelectedAccounts"
       @cancel="handleDeletionCancel"
+    />
+
+    <!-- 通知弹窗 -->
+    <NotificationDialog
+      v-if="notification.show"
+      :type="notification.type"
+      :title="notification.title"
+      :message="notification.message"
+      :buttonText="notification.buttonText"
+      @close="closeNotification"
     />
 
   </div>

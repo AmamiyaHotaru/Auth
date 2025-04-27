@@ -4,10 +4,21 @@ import (
 	"auth/db"
 	"auth/model"
 	"auth/utils"
+	"bytes"
 	"context"
-	"github.com/pquerna/otp/totp"
+	"fmt"
+	"image"
+	_ "image/gif"  // 支持GIF格式
+	_ "image/jpeg" // 支持JPEG格式
+	_ "image/png"  // 支持PNG格式
 	"log"
 	"time"
+
+	"github.com/makiuchi-d/gozxing"
+	"github.com/makiuchi-d/gozxing/qrcode"
+	"github.com/pquerna/otp"
+
+	"github.com/pquerna/otp/totp"
 )
 
 // App struct
@@ -78,7 +89,59 @@ func (a *App) InsertSecret(accountName string, serverName string, secret string,
 
 	log.Printf("accountName：%s,serverName:%s,accountType：%d,加密后密钥: %s\n", accountName, serverName, accountType, encryptedSecret)
 	err = db.InsertSecret(accountType, accountName, serverName, encryptedSecret)
+	if err != nil {
+		log.Println("添加失败", err)
+	}
 
 	return nil
 
+}
+
+func (a *App) DeleteSecret(ids []uint) error {
+	err := db.DeleteSecret(ids)
+	if err != nil {
+		log.Println("删除失败", err)
+	}
+	return nil
+}
+func (a *App) RecognizeQRCode(imgBytes []byte) error {
+	reader := bytes.NewReader(imgBytes)
+	img, format, err := image.Decode(reader)
+	if err != nil {
+		log.Printf("图像解码失败: %v, 格式: %s\n", err, format)
+		return fmt.Errorf("failed to decode image: %w", err)
+	}
+
+	// prepare BinaryBitmap
+	bmp, err := gozxing.NewBinaryBitmapFromImage(img)
+	if err != nil {
+		return fmt.Errorf("failed to create BinaryBitmap: %w", err)
+	}
+
+	// decode image
+	qrReader := qrcode.NewQRCodeReader()
+	result, err := qrReader.Decode(bmp, nil)
+
+	if err != nil {
+		return fmt.Errorf("failed to decode QR code: %w", err)
+	}
+
+	fmt.Println(result)
+
+	key, err := otp.NewKeyFromURL(result.GetText())
+	if err != nil {
+		return fmt.Errorf("failed to get otp info: %w", err)
+	}
+
+	fmt.Println("Account:", key.AccountName())
+	fmt.Println("Issuer:", key.Issuer())
+	fmt.Println("Secret:", key.Secret())
+
+	// 添加解析出的验证码信息
+	err = a.InsertSecret(key.AccountName(), key.Issuer(), key.Secret(), 0)
+	if err != nil {
+		return fmt.Errorf("failed to add account: %w", err)
+	}
+
+	return nil
 }
