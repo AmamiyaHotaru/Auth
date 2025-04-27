@@ -1,14 +1,57 @@
 <script setup>
 import { ref, onMounted, computed, onUnmounted, nextTick } from 'vue';
-import {GetSecretsList, InsertSecret, DeleteSecret, RecognizeQRCode} from '../../wailsjs/go/main/App';
+import { GetSecretsList, InsertSecret, DeleteSecret, RecognizeQRCode } from '../../wailsjs/go/main/App';
 import ConfirmationDialog from './ConfirmationDialog.vue';
 import ManualEntryDialog from './ManualEntryDialog.vue';
 import AddOptionsMenu from './AddOptionsMenu.vue';
 import QrCodeUploadDialog from './QrCodeUploadDialog.vue';
-import NotificationDialog from './NotificationDialog.vue';
+import * as runtime from "../../wailsjs/runtime/runtime";
 
 // --- 状态 ---
 const accounts = ref([]);
+// 存储显示验证码的账户ID
+const visibleCodes = ref(new Set());
+// 用于追踪复制按钮的状态
+const copiedCodes = ref(new Set());
+
+// 显示或隐藏验证码
+function toggleCodeVisibility(accountId, event) {
+  event.stopPropagation(); // 阻止事件冒泡
+  if (visibleCodes.value.has(accountId)) {
+    visibleCodes.value.delete(accountId);
+  } else {
+    visibleCodes.value.add(accountId);
+  }
+}
+
+// 判断验证码是否可见
+function isCodeVisible(accountId) {
+  return visibleCodes.value.has(accountId);
+}
+
+// 复制验证码到剪贴板
+async function copyCodeToClipboard(code, accountId, event) {
+  event.stopPropagation(); // 阻止事件冒泡
+  
+  // 添加视觉反馈
+  const targetElement = event.currentTarget;
+  targetElement.classList.add('copy-active');
+  
+  // 500毫秒后移除视觉反馈
+  setTimeout(() => {
+    targetElement.classList.remove('copy-active');
+  }, 500);
+  
+  console.log('复制验证码:', code);
+  const success = await runtime.ClipboardSetText(code);
+  console.log('复制结果:', success);
+  // 添加短暂的"已复制"状态
+  copiedCodes.value.add(accountId);
+  setTimeout(() => {
+    copiedCodes.value.delete(accountId);
+  }, 1500);
+      
+}
 
 // --- 辅助函数 ---
 // 计算当前时间在 30 秒周期内的剩余秒数
@@ -17,42 +60,16 @@ function calculateTimeLeft() {
     return 30 - (nowSeconds % 30);
 }
 
-// --- 通知弹窗状态 ---
-const notification = ref({
-  show: false,
-  type: 'info',
-  title: '',
-  message: '',
-  buttonText: '确定'
-});
 
-// 显示通知弹窗
-function showNotification(type, title, message, buttonText = '确定') {
-  notification.value = {
-    show: true,
-    type,
-    title,
-    message,
-    buttonText
-  };
-}
-
-// 关闭通知弹窗
-function closeNotification() {
-  notification.value.show = false;
-}
 
 // 获取账户列表
 const getSecretsList = async () => {
   try {
     const response = await GetSecretsList();
-    
     processAccountList(response);
-
   } catch (error) {
     console.error('获取账户列表时出错:', error);
     accounts.value = [];
-    showNotification('error', '错误', '获取账户列表时出错');
   }
 };
 
@@ -195,7 +212,6 @@ async function deleteSelectedAccounts() {
     
   } catch (error) {
     console.error(`删除账户 ${idsToDelete.join(', ')} 时出错:`, error);
-    showNotification('error', '错误', `删除账户时出错: ${error}`);
   } finally {
      // 删除尝试后退出选择模式
      cancelSelectionMode();
@@ -270,7 +286,6 @@ async function handleManualAdd(formData) {
     
   } catch (error) {
     console.error('添加账户失败:', error);
-    showNotification('error', '错误', `添加账户失败: ${error}`);
   }
 }
 
@@ -298,8 +313,6 @@ async function handleQrCodeDetected(data) {
     // 直接传递图像数据数组，不需要额外处理
     await RecognizeQRCode(data);
     
-    // 显示成功提示
-    showNotification('success', '成功', '二维码识别成功，账户已添加');
     
     // 检测成功后刷新账户列表
     await getSecretsList();
@@ -320,8 +333,6 @@ async function handleQrCodeDetected(data) {
       qrCodeDialogRef.value.setProcessingError(error);
     }
     
-    // 显示错误通知
-    showNotification('error', '错误', `二维码识别失败: ${error}`);
     
     // 注意：不关闭对话框，让用户可以重试
   }
@@ -376,7 +387,6 @@ onUnmounted(() => {
   clearTimeout(longPressTimer); // 清除可能存在的长按计时器
 });
 
-
 // 计算圆形进度条的样式
 const getProgressStyle = (timeLeft) => {
   // 计算百分比，确保不低于 0
@@ -428,12 +438,25 @@ const getProgressStyle = (timeLeft) => {
              <span class="name">{{ account.AccountName }}</span>
            </div>
            <div class="code-line">
-             <span class="code">{{ account.Code }}</span>
+             <span v-if="isCodeVisible(account.ID)" class="code" @click="copyCodeToClipboard(account.Code, account.ID, $event)">{{ account.Code }}</span>
+             <span v-else class="hidden-code" @click="copyCodeToClipboard(account.Code, account.ID, $event)">••••••</span>
+             <button @click="toggleCodeVisibility(account.ID, $event)" class="toggle-code-btn" :class="{'active': isCodeVisible(account.ID)}">
+               <svg v-if="isCodeVisible(account.ID)" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye-off">
+                 <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                 <line x1="1" y1="1" x2="23" y2="23"></line>
+               </svg>
+               <svg v-else xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye">
+                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                 <circle cx="12" cy="12" r="3"></circle>
+               </svg>
+             </button>
            </div>
         </div>
         <!-- 右侧：进度条 (无论是否在选择模式下都显示) -->
         <div class="progress-container">
-           <div class="progress-circle" :style="getProgressStyle(account.timeLeft)"></div>
+           <div class="progress-circle" :style="getProgressStyle(account.timeLeft)">
+             <div class="time-left">{{ account.timeLeft }}</div>
+           </div>
         </div>
       </div>
     </main>
@@ -475,17 +498,6 @@ const getProgressStyle = (timeLeft) => {
       @confirm="deleteSelectedAccounts"
       @cancel="handleDeletionCancel"
     />
-
-    <!-- 通知弹窗 -->
-    <NotificationDialog
-      v-if="notification.show"
-      :type="notification.type"
-      :title="notification.title"
-      :message="notification.message"
-      :buttonText="notification.buttonText"
-      @close="closeNotification"
-    />
-
   </div>
 </template>
 
@@ -593,13 +605,9 @@ const getProgressStyle = (timeLeft) => {
     flex-grow: 1; /* 允许详情占用可用空间 */
     margin-right: 10px; /* 减少间距 */
     min-width: 0; /* 防止 flex 项目溢出 */
-    pointer-events: none; /* 防止选择模式下的指针事件 */
 }
 .account-item.selection-active .account-details {
     pointer-events: none;
-}
-.account-item:not(.selection-active) .account-details {
-    pointer-events: auto; /* 非选择模式下重新启用指针事件 */
 }
 
 .account-info {
@@ -619,14 +627,62 @@ const getProgressStyle = (timeLeft) => {
   color: #6c757d;
 }
 .code-line {
- /* 容器 */
+  display: flex;
+  align-items: center;
+  margin-top: 5px;
 }
 .code {
-  font-size: 2.2em; /* 更大的代码 */
+  font-size: 2em; /* 更大的代码 */
   font-weight: bold;
   color: #0d47a1; /* 深蓝色 */
-  letter-spacing: 3px; /* 更大的代码间距 */
+  letter-spacing: 2px; /* 字符间距 */
   font-family: 'Courier New', Courier, monospace; /* 等宽字体 */
+  cursor: pointer; /* 指示可点击 */
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+.code:hover {
+  background-color: rgba(66, 133, 244, 0.1); /* 淡蓝色背景 */
+}
+.code:active {
+  background-color: rgba(66, 133, 244, 0.2); /* 更深的背景 */
+}
+.hidden-code {
+  font-size: 2em; /* 保持一致大小 */
+  font-weight: bold;
+  color: #aaa; /* 灰色圆点 */
+  letter-spacing: 3px;
+  padding: 2px 5px;
+  cursor: pointer; /* 指示可点击 */
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+.hidden-code:hover {
+  background-color: rgba(66, 133, 244, 0.1); /* 淡蓝色背景 */
+}
+.hidden-code:active {
+  background-color: rgba(66, 133, 244, 0.2); /* 更深的背景 */
+}
+.toggle-code-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6c757d;
+  margin-left: 10px;
+  padding: 5px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+.toggle-code-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: #4285F4;
+}
+.toggle-code-btn.active {
+  color: #4285F4;
 }
 
 /* 进度条 */
@@ -638,7 +694,7 @@ const getProgressStyle = (timeLeft) => {
   height: 40px; /* 固定高度 */
   flex-shrink: 0; /* 防止容器缩小 */
   position: relative; /* 用于内部的绝对定位 */
-  margin-right: 10px; /* 进度条和删除按钮之间的间距 */
+  margin-left: 10px; /* 与左侧元素的间距 */
 }
 .progress-circle {
   width: 36px; /* 圆的直径 */
@@ -646,9 +702,14 @@ const getProgressStyle = (timeLeft) => {
   border-radius: 50%; /* 使其圆形 */
   /* 背景通过 :style 动态设置 */
   transition: background 0.1s linear; /* 平滑过渡计时器更新 */
-  display: flex; /* 居中内部内容（如果有） */
+  display: flex; /* 居中内部内容 */
   align-items: center;
   justify-content: center;
+}
+.time-left {
+  font-size: 0.85em;
+  font-weight: bold;
+  color: #4285F4;
 }
 
 /* 底部 */
@@ -678,4 +739,24 @@ const getProgressStyle = (timeLeft) => {
 /* 移除旧的删除按钮样式（如果存在） */
 .delete-button { display: none; }
 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* 复制成功动画 */
+.copy-success {
+  animation: popIn 0.3s ease-out;
+}
+
+/* 复制时的视觉反馈样式 */
+.copy-active {
+  background-color: rgba(52, 168, 83, 0.15) !important;
+  box-shadow: 0 0 0 2px rgba(52, 168, 83, 0.4);
+}
 </style>

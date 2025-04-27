@@ -1,13 +1,14 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "auth",
-  "outputfilename": "auth",
+  "name": "Euthenticator",
+  "outputfilename": "Euthenticator",
   "frontend:install": "npm install",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "AmamiyaHotaru",
-    "email": "303977130@qq.com"
-  }
+    "name": "Eunie",
+    "email": "eunie@eunie.online"
+  },
+  "devtools": true
 }
