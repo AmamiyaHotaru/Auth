@@ -10,24 +10,50 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/joho/godotenv"
 )
 
+// 这个变量将在编译时通过ldflags注入
+var embeddedMasterPassword string
+
 func init() {
-	// 优先加载 .env.local，再加载 .env
-	err := godotenv.Load(".env.local", ".env")
-	if err != nil {
-		log.Println("Warning: .env.local or .env file not found")
+	// 尝试多种方式加载环境变量:
+	// 1. 先尝试从当前目录加载
+	err1 := godotenv.Load(".env.local", ".env")
+
+	// 2. 再尝试从可执行文件所在目录加载
+	execPath, err := os.Executable()
+	if err == nil {
+		execDir := filepath.Dir(execPath)
+		err2 := godotenv.Load(filepath.Join(execDir, ".env.local"), filepath.Join(execDir, ".env"))
+		if err1 != nil && err2 != nil {
+			log.Println("Warning: Failed to load .env files from current and executable directories")
+		}
+	} else {
+		log.Println("Warning: Failed to determine executable path:", err)
+		if err1 != nil {
+			log.Println("Warning: Also failed to load .env files from current directory")
+		}
 	}
 }
 
 // deriveKey 用主密码生成加密Key（内部私有）
 func deriveKey() []byte {
+	// 优先使用环境变量
 	masterPassword := os.Getenv("MASTER_PASSWORD")
-	if masterPassword == "" {
-		panic("环境变量 MASTER_PASSWORD 未设置")
+
+	// 如果环境变量为空，使用编译时嵌入的密码
+	if masterPassword == "" && embeddedMasterPassword != "" {
+		masterPassword = embeddedMasterPassword
 	}
+
+	// 如果仍然为空，则报错
+	if masterPassword == "" {
+		panic("未能获取主密码，环境变量MASTER_PASSWORD未设置且编译时未嵌入密码")
+	}
+
 	hash := sha256.Sum256([]byte(masterPassword))
 	return hash[:]
 }
