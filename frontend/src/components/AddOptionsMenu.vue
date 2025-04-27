@@ -42,7 +42,7 @@ onBeforeUnmount(() => {
   >
     <div class="menu-item" @click="handleSelect('scan')">
       <div class="icon">📷</div>
-      <div class="text">解析图片</div>
+      <div class="text">解析二维码</div>
     </div>
     <div class="menu-item" @click="handleSelect('manual')">
       <div class="icon">✏️</div>
