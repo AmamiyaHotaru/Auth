@@ -4,124 +4,50 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: '发布版本 (例如: v1.0.0)'
-        required: true
-        default: 'v1.0.0'
 
 # 显式声明权限
 permissions:
   contents: write  # 这是创建发布和上传文件所需的权限
 
 jobs:
-  # 预处理任务 - 处理标签和设置正确的版本变量
-  prepare:
+  build-and-release:
     runs-on: ubuntu-latest
-    outputs:
-      VERSION: ${{ steps.set-version.outputs.VERSION }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # 获取完整历史以确保标签创建正确
-
-      # 处理手动触发时的标签创建
-      - name: Create Tag (Manual trigger only)
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git tag -a ${{ github.event.inputs.version }} -m "Release ${{ github.event.inputs.version }}"
-          git push origin ${{ github.event.inputs.version }}
         
-      # 设置统一的版本变量
-      - name: Set Version
-        id: set-version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            # 标签推送事件，从 ref 中提取版本
-            VERSION=${GITHUB_REF#refs/tags/}
-            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          fi
-
-  # 创建发布
-  create-release:
-    needs: prepare
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ needs.prepare.outputs.VERSION }}
-          fetch-depth: 0
-
-      - name: Create GitHub Release
+      - name: Create Release
+        id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          name: Release ${{ needs.prepare.outputs.VERSION }}
-          tag_name: ${{ needs.prepare.outputs.VERSION }}
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Windows 构建
   build-windows:
-    needs: [prepare, create-release]
+    needs: build-and-release
     runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          ref: ${{ needs.prepare.outputs.VERSION }}
 
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.21'
-          check-latest: false
+          go-version: '1.23'
+          check-latest: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'frontend/package-lock.json'
-
-      # 缓存 Go 模块
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~\AppData\Local\go-build
-            ~\go\pkg\mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      # 缓存 Wails
-      - name: Cache Wails
-        id: cache-wails
-        uses: actions/cache@v3
-        with:
-          path: ~\go\bin\wails.exe
-          key: ${{ runner.os }}-wails-${{ hashFiles('go.mod') }}
 
       - name: Install Wails
-        if: steps.cache-wails.outputs.cache-hit != 'true'
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.7.1
-
-      # 安装前端依赖
-      - name: Install frontend dependencies
-        run: |
-          cd frontend
-          npm ci
-        shell: powershell
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Create .env file
         run: |
@@ -142,71 +68,36 @@ jobs:
           # 复制生成的可执行文件和资源
           cp -r build/bin/* release/
           # 创建 ZIP 文件
-          Compress-Archive -Path release/* -DestinationPath Euthenticator-windows-${{ needs.prepare.outputs.VERSION }}.zip
+          Compress-Archive -Path release/* -DestinationPath Euthenticator-windows-${{ github.ref_name }}.zip
         shell: powershell
 
       - name: Upload Windows build
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ needs.prepare.outputs.VERSION }}
-          files: Euthenticator-windows-${{ needs.prepare.outputs.VERSION }}.zip
+          files: Euthenticator-windows-${{ github.ref_name }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Linux 构建
   build-linux:
-    needs: [prepare, create-release]
+    needs: build-and-release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          ref: ${{ needs.prepare.outputs.VERSION }}
 
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.21'
-          check-latest: false
+          go-version: '1.23'
+          check-latest: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'frontend/package-lock.json'
-
-      # 缓存 Go 模块
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      # 缓存 Wails
-      - name: Cache Wails
-        id: cache-wails
-        uses: actions/cache@v3
-        with:
-          path: ~/go/bin/wails
-          key: ${{ runner.os }}-wails-${{ hashFiles('go.mod') }}
 
       - name: Install Wails
-        if: steps.cache-wails.outputs.cache-hit != 'true'
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.7.1
-
-      # 缓存系统依赖
-      - name: Cache apt packages
-        uses: actions/cache@v3
-        with:
-          path: /var/cache/apt/archives
-          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/release.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Install Linux dependencies
         run: |
@@ -221,15 +112,9 @@ jobs:
           # 安装其他可能需要的依赖
           sudo apt-get install -y pkg-config
 
-      # 安装前端依赖
-      - name: Install frontend dependencies
-        run: |
-          cd frontend
-          npm ci
-
       - name: Create .env file
         run: |
-          echo "MASTER_PASSWORD='${{ secrets.MASTER_PASSWORD }}'" > .env
+          echo "MASTER_PASSWORD=${{ secrets.MASTER_PASSWORD }}" > .env
         shell: bash
 
       - name: Build for Linux
@@ -247,12 +132,11 @@ jobs:
           # 复制生成的可执行文件和资源
           cp -r build/bin/* release/
           # 创建压缩文件
-          tar -czvf Euthenticator-linux-${{ needs.prepare.outputs.VERSION }}.tar.gz -C release .
+          tar -czvf Euthenticator-linux-${{ github.ref_name }}.tar.gz -C release .
 
       - name: Upload Linux build
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ needs.prepare.outputs.VERSION }}
-          files: Euthenticator-linux-${{ needs.prepare.outputs.VERSION }}.tar.gz
+          files: Euthenticator-linux-${{ github.ref_name }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
