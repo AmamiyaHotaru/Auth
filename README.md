@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="build/appicon.png" alt="Euthenticator Logo" width="150">
-  <h3>纯本地的 TOTP 身份验证器</h3>
+  <h3>基于Wails纯本地的 TOTP 身份验证器</h3>
 </div>
 
 ## 简介
@@ -130,8 +130,3 @@ Euthenticator 使用以下技术构建：
 
 欢迎提交 Issue 或 Pull Request 来改进 Euthenticator。
 
-## 联系方式
-
-开发者：AmamiyaHotaru  
-邮箱：eunie@eunie.online  
-项目仓库：[https://github.com/AmamiyaHotaru/Auth](https://github.com/AmamiyaHotaru/Auth)
