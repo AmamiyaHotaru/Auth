@@ -5,25 +5,30 @@ on:
     tags:
       - 'v*'
 
+# 显式声明权限
+permissions:
+  contents: write  # 这是创建发布和上传文件所需的权限
+
 jobs:
-  create-release:
+  build-and-release:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-windows:
-    needs: create-release
+    needs: build-and-release
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -66,18 +71,15 @@ jobs:
         shell: powershell
 
       - name: Upload Windows build
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v1
+        with:
+          files: Euthenticator-windows-${{ github.ref_name }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./Euthenticator-windows-${{ github.ref_name }}.zip
-          asset_name: Euthenticator-windows-${{ github.ref_name }}.zip
-          asset_content_type: application/zip
 
-  build-macos:
-    needs: create-release
-    runs-on: macos-latest
+  build-linux:
+    needs: build-and-release
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -96,12 +98,17 @@ jobs:
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+
       - name: Create .env file
         run: |
           echo "MASTER_PASSWORD=${{ secrets.MASTER_PASSWORD }}" > .env
         shell: bash
 
-      - name: Build for macOS
+      - name: Build for Linux
         run: |
           chmod +x ./build.sh
           ./build.sh
@@ -109,21 +116,18 @@ jobs:
         env:
           MASTER_PASSWORD: ${{ secrets.MASTER_PASSWORD }}
 
-      - name: Package macOS build
+      - name: Package Linux build
         run: |
           # 创建打包目录
           mkdir -p release
-          # 复制生成的 .app 文件和资源
+          # 复制生成的可执行文件和资源
           cp -r build/bin/* release/
-          # 创建 DMG 文件
-          hdiutil create -volname "Euthenticator" -srcfolder release -ov -format UDZO Euthenticator-macos-${{ github.ref_name }}.dmg
+          # 创建压缩文件
+          tar -czvf Euthenticator-linux-${{ github.ref_name }}.tar.gz -C release .
 
-      - name: Upload macOS build
-        uses: actions/upload-release-asset@v1
+      - name: Upload Linux build
+        uses: softprops/action-gh-release@v1
+        with:
+          files: Euthenticator-linux-${{ github.ref_name }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./Euthenticator-macos-${{ github.ref_name }}.dmg
-          asset_name: Euthenticator-macos-${{ github.ref_name }}.dmg
-          asset_content_type: application/octet-stream
