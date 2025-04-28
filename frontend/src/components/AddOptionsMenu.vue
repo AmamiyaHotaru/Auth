@@ -42,7 +42,10 @@ onBeforeUnmount(() => {
   >
     <div class="menu-item" @click="handleSelect('scan')">
       <div class="icon">📷</div>
-      <div class="text">解析二维码</div>
+      <div class="text">
+        解析二维码
+        <div class="subtext">支持谷歌身份验证器</div>
+      </div>
     </div>
     <div class="menu-item" @click="handleSelect('manual')">
       <div class="icon">✏️</div>
@@ -81,6 +84,12 @@ onBeforeUnmount(() => {
 
 .menu-item .text {
   font-size: 0.95em;
+}
+
+.subtext {
+  font-size: 0.8em;
+  color: #999;
+  margin-top: 3px;
 }
 
 .menu-item:not(:last-child) {

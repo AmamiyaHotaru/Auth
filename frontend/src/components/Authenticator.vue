@@ -13,6 +13,8 @@ const accounts = ref([]);
 const visibleCodes = ref(new Set());
 // 用于追踪复制按钮的状态
 const copiedCodes = ref(new Set());
+// 全局显示/隐藏所有验证码的状态
+const showAllCodes = ref(false);
 
 // 显示或隐藏验证码
 function toggleCodeVisibility(accountId, event) {
@@ -26,7 +28,13 @@ function toggleCodeVisibility(accountId, event) {
 
 // 判断验证码是否可见
 function isCodeVisible(accountId) {
-  return visibleCodes.value.has(accountId);
+  return showAllCodes.value || visibleCodes.value.has(accountId);
+}
+
+// 切换显示/隐藏所有验证码
+function toggleAllCodesVisibility(event) {
+  event.stopPropagation(); // 阻止事件冒泡
+  showAllCodes.value = !showAllCodes.value;
 }
 
 // 复制验证码到剪贴板
@@ -463,7 +471,19 @@ const getProgressStyle = (timeLeft) => {
 
     <!-- 条件渲染的底部 -->
     <footer v-if="!selectionMode" class="app-footer">
-       <button @click="showAddOptionsMenu" class="add-button">+</button>
+      <div class="footer-buttons">
+        <button @click="toggleAllCodesVisibility($event)" class="toggle-all-button" :class="{'active': showAllCodes}">
+          <svg v-if="showAllCodes" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye-off">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+          </svg>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+        <button @click="showAddOptionsMenu" class="add-button">+</button>
+      </div>
     </footer>
 
     <!-- 添加选项菜单 -->
@@ -719,6 +739,37 @@ const getProgressStyle = (timeLeft) => {
   border-top: 1px solid #dee2e6;
   flex-shrink: 0;
 }
+
+.footer-buttons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px; /* 按钮之间的间距 */
+}
+
+.toggle-all-button {
+  background-color: #f5f5f5;
+  border: none;
+  border-radius: 50%;
+  width: 45px;
+  height: 45px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.toggle-all-button:hover {
+  background-color: #e0e0e0;
+}
+
+.toggle-all-button.active {
+  color: #4285F4;
+  background-color: #e8f0fe;
+}
+
 .add-button {
   background-color: #34A853;
   color: white;
