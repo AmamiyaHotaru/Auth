@@ -78,7 +78,11 @@ function calculateProgressOffset(timeLeft) {
 
 // 格式化验证码
 function formatCode(code) {
-  return code.match(/.{1,4}/g).join(' ');
+  // 将验证码格式化为 3-3 结构，例如：123 456
+  if (code && code.length >= 6) {
+    return code.substring(0, 3) + ' ' + code.substring(3, 6);
+  }
+  return code;
 }
 
 // 获取账户列表
@@ -254,10 +258,10 @@ function showAddOptionsMenu(event) {
   const button = event.currentTarget; // 使用currentTarget代替target以确保获取的是按钮元素
   const rect = button.getBoundingClientRect();
   
-  // 调整位置计算，确保菜单在按钮上方
+  // 调整位置计算，确保菜单显示在按钮正下方
   addButtonPosition.value = {
-    bottom: window.innerHeight - rect.top,
-    right: window.innerWidth - rect.right
+    top: rect.bottom + 5, // 菜单顶部位置为按钮底部加5px间距
+    left: rect.left-80 // 菜单左侧对齐按钮左侧
   };
   
   // 显示选项菜单
@@ -423,9 +427,9 @@ const getProgressStyle = (timeLeft) => {
     <aside class="sidebar">
       <div class="sidebar-header">
         <div class="app-logo">
-          <img src="../assets/images/logo-universal.png" alt="身份验证器" class="logo-image">
+          <img src="../assets/images/logo-universal.png" alt="Euthenticator" class="logo-image">
         </div>
-        <h1 class="app-title">身份验证器</h1>
+        <h1 class="app-title">Euthenticator</h1>
       </div>
       <div class="sidebar-content">
         <!-- 这里可以未来添加导航选项或过滤器等 -->
@@ -548,7 +552,7 @@ const getProgressStyle = (timeLeft) => {
               
               <div class="code-section">
                 <span v-if="isCodeVisible(account.ID)" class="code" @click="copyCodeToClipboard(account.Code, account.ID, $event)">{{ formatCode(account.Code) }}</span>
-                <span v-else class="hidden-code" @click="copyCodeToClipboard(account.Code, account.ID, $event)">•••• ••</span>
+                <span v-else class="hidden-code" @click="copyCodeToClipboard(account.Code, account.ID, $event)">••• •••</span>
                 <div class="code-actions">
                   <button @click="toggleCodeVisibility(account.ID, $event)" class="action-button" :class="{'active': isCodeVisible(account.ID)}" title="显示/隐藏">
                     <svg v-if="isCodeVisible(account.ID)" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -563,7 +567,7 @@ const getProgressStyle = (timeLeft) => {
                   <button @click="copyCodeToClipboard(account.Code, account.ID, $event)" class="action-button" title="复制">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1-2 2v1"></path>
                     </svg>
                   </button>
                 </div>
@@ -690,6 +694,21 @@ const getProgressStyle = (timeLeft) => {
   padding: 15px;
   background-color: #f8f9fa;
   border-bottom: 1px solid #dee2e6;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.selection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .header-left h2 {

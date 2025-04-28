@@ -35,8 +35,8 @@ onBeforeUnmount(() => {
     v-if="show" 
     class="options-menu"
     :style="{ 
-      bottom: `${position?.bottom || 70}px`,
-      right: `${position?.right || 20}px`
+      top: `${position?.top || 70}px`,
+      left: `${position?.left || 20}px`
     }"
     @click.stop
   >
