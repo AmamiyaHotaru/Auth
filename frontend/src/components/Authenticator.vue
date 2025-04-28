@@ -68,7 +68,18 @@ function calculateTimeLeft() {
     return 30 - (nowSeconds % 30);
 }
 
+// 计算进度条偏移量
+function calculateProgressOffset(timeLeft) {
+  const radius = 15;
+  const circumference = 2 * Math.PI * radius;
+  const percentage = timeLeft / 30;
+  return circumference * (1 - percentage);
+}
 
+// 格式化验证码
+function formatCode(code) {
+  return code.match(/.{1,4}/g).join(' ');
+}
 
 // 获取账户列表
 const getSecretsList = async () => {
@@ -407,84 +418,166 @@ const getProgressStyle = (timeLeft) => {
 </script>
 
 <template>
-  <div id="authenticator-container">
-    <!-- 条件渲染的头部 -->
-    <header v-if="!selectionMode" class="app-header">
-      <h1>身份验证器</h1>
-    </header>
-    <header v-else class="selection-header">
-      <button @click="cancelSelectionMode" class="cancel-selection-btn">&lt;</button>
-      <span class="selection-count">{{ selectedCount }} 项已选中</span>
-      <button @click="requestDeleteSelected" :disabled="selectedCount === 0" class="delete-selection-btn">删除</button>
-    </header>
-
-    <main class="accounts-list">
-      <!-- 没有账户时的提示 -->
-      <div v-if="accounts.length === 0 && !selectionMode" class="no-accounts">
-        <p>还没有添加账户</p>
-      </div>
-      <!-- 账户列表项 -->
-      <div v-else v-for="account in accounts" :key="account.ID"
-           class="account-item"
-           :class="{ 'selected': selectedAccountIds.has(account.ID), 'selection-active': selectionMode }"
-           @mousedown="handleItemInteractionStart($event, account)"
-           @mouseup="handleItemInteractionEnd($event, account)"
-           @touchstart.passive="handleItemInteractionStart($event, account)"
-           @touchend="handleItemInteractionEnd($event, account)"
-           @click="handleItemClick(account)"
-           @contextmenu.prevent> <!-- 阻止条目上的右键菜单 -->
-
-        <!-- 选择指示器 (可选的复选框样式) -->
-         <div v-if="selectionMode" class="selection-indicator">
-             <input type="checkbox" :checked="selectedAccountIds.has(account.ID)" @click.stop="toggleSelection(account.ID)" class="selection-checkbox">
-         </div>
-
-        <!-- 左侧：账户详情 -->
-        <div class="account-details">
-           <div class="account-info">
-             <span class="issuer">{{ account.ServerName }}</span>
-             <span class="name">{{ account.AccountName }}</span>
-           </div>
-           <div class="code-line">
-             <span v-if="isCodeVisible(account.ID)" class="code" @click="copyCodeToClipboard(account.Code, account.ID, $event)">{{ account.Code }}</span>
-             <span v-else class="hidden-code" @click="copyCodeToClipboard(account.Code, account.ID, $event)">••••••</span>
-             <button @click="toggleCodeVisibility(account.ID, $event)" class="toggle-code-btn" :class="{'active': isCodeVisible(account.ID)}">
-               <svg v-if="isCodeVisible(account.ID)" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye-off">
-                 <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                 <line x1="1" y1="1" x2="23" y2="23"></line>
-               </svg>
-               <svg v-else xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye">
-                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                 <circle cx="12" cy="12" r="3"></circle>
-               </svg>
-             </button>
-           </div>
+  <div id="authenticator-container" :class="{ 'selection-mode': selectionMode }">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="app-logo">
+          <img src="../assets/images/logo-universal.png" alt="身份验证器" class="logo-image">
         </div>
-        <!-- 右侧：进度条 (无论是否在选择模式下都显示) -->
-        <div class="progress-container">
-           <div class="progress-circle" :style="getProgressStyle(account.timeLeft)">
-             <div class="time-left">{{ account.timeLeft }}</div>
-           </div>
+        <h1 class="app-title">身份验证器</h1>
+      </div>
+      <div class="sidebar-content">
+        <!-- 这里可以未来添加导航选项或过滤器等 -->
+        <div class="sidebar-section">
+          <h2 class="section-title">账户列表</h2>
+          <!-- 账户统计信息 -->
+          <div class="account-stats">
+            <span class="stat-item">总计: {{ accounts.length }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar-footer">
+        <!-- 侧边栏底部内容（可选） -->
+      </div>
+    </aside>
+
+    <!-- 主内容区域 -->
+    <main class="main-content">
+      <!-- 条件渲染的头部 -->
+      <header v-if="!selectionMode" class="content-header">
+        <div class="header-left">
+          <h2>安全令牌</h2>
+        </div>
+        <div class="header-right">
+          <button @click="toggleAllCodesVisibility($event)" class="toolbar-button" :class="{'active': showAllCodes}" title="显示/隐藏所有验证码">
+            <svg v-if="showAllCodes" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye-off">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span class="button-label">{{showAllCodes ? '隐藏所有' : '显示所有'}}</span>
+          </button>
+          <button @click="showAddOptionsMenu($event)" class="toolbar-button primary-button">
+            <span class="button-icon">+</span>
+            <span class="button-label">添加账户</span>
+          </button>
+        </div>
+      </header>
+      
+      <header v-else class="selection-header">
+        <div class="header-left">
+          <button @click="cancelSelectionMode" class="cancel-selection-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            返回
+          </button>
+          <span class="selection-count">{{ selectedCount }} 项已选中</span>
+        </div>
+        <div class="header-right">
+          <button @click="requestDeleteSelected" :disabled="selectedCount === 0" class="toolbar-button danger-button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1-2-2h4a2 2 0 0 1-2 2v1"></path>
+            </svg>
+            <span class="button-label">删除选中</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- 账户列表部分 -->
+      <div class="accounts-container">
+        <!-- 没有账户时的提示 -->
+        <div v-if="accounts.length === 0" class="no-accounts">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <p>还没有添加任何验证器账户</p>
+          <button @click="showAddOptionsMenu($event)" class="desktop-button primary-button">
+            <span class="button-icon">+</span>
+            <span>添加账户</span>
+          </button>
+        </div>
+
+        <!-- 账户列表项 -->
+        <div v-else class="accounts-list">
+          <div v-for="account in accounts" :key="account.ID"
+              class="account-card"
+              :class="{ 'selected': selectedAccountIds.has(account.ID), 'selection-active': selectionMode }"
+              @mousedown="handleItemInteractionStart($event, account)"
+              @mouseup="handleItemInteractionEnd($event, account)"
+              @touchstart.passive="handleItemInteractionStart($event, account)"
+              @touchend="handleItemInteractionEnd($event, account)"
+              @click="handleItemClick(account)"
+              @contextmenu.prevent> <!-- 阻止条目上的右键菜单 -->
+
+            <!-- 选择指示器 -->
+            <div v-if="selectionMode" class="selection-indicator">
+                <input type="checkbox" :checked="selectedAccountIds.has(account.ID)" @click.stop="toggleSelection(account.ID)" class="selection-checkbox">
+            </div>
+
+            <!-- 账户详情 -->
+            <div class="card-content">
+              <div class="account-header">
+                <div class="service-info">
+                  <div class="service-icon">{{ account.ServerName.charAt(0).toUpperCase() }}</div>
+                  <div class="service-details">
+                    <span class="server-name">{{ account.ServerName }}</span>
+                    <span class="account-name">{{ account.AccountName }}</span>
+                  </div>
+                </div>
+                <div class="time-counter">
+                  <div class="progress-ring-wrapper">
+                    <svg class="progress-ring" width="36" height="36">
+                      <circle class="progress-ring-bg" r="15" cx="18" cy="18" />
+                      <circle class="progress-ring-circle" 
+                              r="15" 
+                              cx="18" 
+                              cy="18" 
+                              :stroke-dashoffset="calculateProgressOffset(account.timeLeft)" />
+                    </svg>
+                    <span class="time-left">{{ account.timeLeft }}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="code-section">
+                <span v-if="isCodeVisible(account.ID)" class="code" @click="copyCodeToClipboard(account.Code, account.ID, $event)">{{ formatCode(account.Code) }}</span>
+                <span v-else class="hidden-code" @click="copyCodeToClipboard(account.Code, account.ID, $event)">•••• ••</span>
+                <div class="code-actions">
+                  <button @click="toggleCodeVisibility(account.ID, $event)" class="action-button" :class="{'active': isCodeVisible(account.ID)}" title="显示/隐藏">
+                    <svg v-if="isCodeVisible(account.ID)" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                      <line x1="1" y1="1" x2="23" y2="23"></line>
+                    </svg>
+                    <svg v-else xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </button>
+                  <button @click="copyCodeToClipboard(account.Code, account.ID, $event)" class="action-button" title="复制">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              
+              <!-- 复制成功提示 -->
+              <div v-if="copiedCodes.has(account.ID)" class="copied-indicator">
+                已复制!
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </main>
-
-    <!-- 条件渲染的底部 -->
-    <footer v-if="!selectionMode" class="app-footer">
-      <div class="footer-buttons">
-        <button @click="toggleAllCodesVisibility($event)" class="toggle-all-button" :class="{'active': showAllCodes}">
-          <svg v-if="showAllCodes" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye-off">
-            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-            <line x1="1" y1="1" x2="23" y2="23"></line>
-          </svg>
-          <svg v-else xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-            <circle cx="12" cy="12" r="3"></circle>
-          </svg>
-        </button>
-        <button @click="showAddOptionsMenu" class="add-button">+</button>
-      </div>
-    </footer>
 
     <!-- 添加选项菜单 -->
     <AddOptionsMenu
@@ -525,171 +618,362 @@ const getProgressStyle = (timeLeft) => {
 /* 基础样式 */
 #authenticator-container {
   display: flex;
-  flex-direction: column;
   height: 100vh;
   background-color: #f8f9fa;
   color: #212529;
   overflow: hidden; /* 防止列表滚动时 body 也滚动 */
 }
 
-/* 标准头部 */
-.app-header {
-  background-color: #4285F4;
+.sidebar {
+  width: 250px;
+  background-color: #343a40;
   color: white;
-  padding: 15px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
 }
-.app-header h1 { margin: 0; font-size: 1.5em; }
 
-/* 选择模式头部 */
-.selection-header {
-  background-color: #6c757d; /* 选择模式下使用灰色头部 */
-  color: white;
-  padding: 10px 15px;
+.sidebar-header {
+  padding: 20px;
+  text-align: center;
+  border-bottom: 1px solid #495057;
+}
+
+.app-logo {
+  margin-bottom: 10px;
+}
+
+.logo-image {
+  width: 50px;
+  height: 50px;
+}
+
+.app-title {
+  font-size: 1.5em;
+  margin: 0;
+}
+
+.sidebar-content {
+  flex-grow: 1;
+  padding: 15px;
+}
+
+.sidebar-section {
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-size: 1.2em;
+  margin-bottom: 10px;
+}
+
+.account-stats {
+  font-size: 0.9em;
+}
+
+.sidebar-footer {
+  padding: 15px;
+  border-top: 1px solid #495057;
+}
+
+.main-content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.content-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  flex-shrink: 0;
-  height: 58px; /* 大致匹配普通头部的高度 */
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
 }
-.selection-count { font-size: 1.1em; }
-.cancel-selection-btn, .delete-selection-btn {
+
+.header-left h2 {
+  margin: 0;
+  font-size: 1.5em;
+}
+
+.header-right {
+  display: flex;
+  gap: 10px;
+}
+
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 4px;
+  background-color: #e9ecef;
+  color: #212529;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.toolbar-button:hover {
+  background-color: #dee2e6;
+}
+
+.toolbar-button.primary-button {
+  background-color: #34A853;
+  color: white;
+}
+
+.toolbar-button.primary-button:hover {
+  background-color: #2c8a44;
+}
+
+.toolbar-button.danger-button {
+  background-color: #EA4335;
+  color: white;
+}
+
+.toolbar-button.danger-button:hover {
+  background-color: #c9302c;
+}
+
+.toolbar-button.active {
+  background-color: #e8f0fe;
+  color: #4285F4;
+}
+
+.button-icon {
+  font-size: 1.5em;
+  margin-right: 5px;
+}
+
+.button-label {
+  font-size: 0.9em;
+}
+
+.selection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.selection-count {
+  font-size: 1.1em;
+  margin-left: 15px;
+}
+
+.cancel-selection-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   background: none;
   border: none;
-  color: white;
+  color: #212529;
   font-size: 1em;
   padding: 5px 10px;
   cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
 }
-.cancel-selection-btn { font-size: 1.5em; padding: 0 10px;} /* 让返回箭头更大 */
-.delete-selection-btn:disabled { color: #adb5bd; cursor: not-allowed; }
 
-/* 账户列表 */
-.accounts-list {
+.cancel-selection-btn:hover {
+  background-color: #e9ecef;
+}
+
+.accounts-container {
   flex-grow: 1;
-  overflow-y: auto;
   padding: 15px;
 }
+
 .no-accounts {
   text-align: center;
   margin-top: 50px;
   color: #6c757d;
 }
 
-/* 账户条目 */
-.account-item {
+.desktop-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 4px;
+  background-color: #34A853;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.desktop-button:hover {
+  background-color: #2c8a44;
+}
+
+.accounts-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.account-card {
+  display: flex;
+  flex-direction: column;
   background-color: white;
   border-radius: 8px;
-  margin-bottom: 15px;
   padding: 15px;
-  display: flex; /* 使用 flexbox 对齐详情和进度条 */
-  justify-content: space-between; /* 详情和进度条之间留空 */
-  align-items: center; /* 垂直对齐项目 */
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.2s ease-in-out, background-color 0.2s ease;
-  position: relative; /* 如果选择删除按钮样式，则需要绝对定位 */
-  user-select: none; /* 防止交互时选中文本 */
-}
-.account-item:hover {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  width: calc(33.333% - 10px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  border: 1px solid #dee2e6;
+  transition: all 0.2s ease;
+  position: relative;
 }
 
-/* 选择指示器 */
+.account-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.account-card.selected {
+  background-color: #e8f0fe;
+  border: 1px solid #4285F4;
+}
+
+.selection-mode .account-card:hover {
+  background-color: #f1f3f5;
+}
+
 .selection-indicator {
-    margin-right: 15px; /* 复选框与详情之间的间距 */
-    flex-shrink: 0;
+  position: absolute;
+  top: 10px;
+  left: 10px;
 }
+
 .selection-checkbox {
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
 }
 
-/* 选中状态 */
-.account-item.selected {
-  background-color: #e0e0e0; /* 选中项的浅灰色背景 */
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-}
-/* 选择模式激活时的悬停效果略有不同 */
-.account-item.selection-active:hover {
-    background-color: #d5d5d5;
+.card-content {
+  display: flex;
+  flex-direction: column;
 }
 
-/* 账户详情 */
-.account-details {
-    display: flex;
-    flex-direction: column; /* 堆叠信息行和代码行 */
-    flex-grow: 1; /* 允许详情占用可用空间 */
-    margin-right: 10px; /* 减少间距 */
-    min-width: 0; /* 防止 flex 项目溢出 */
-}
-.account-item.selection-active .account-details {
-    pointer-events: none;
+.account-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
 }
 
-.account-info {
-  margin-bottom: 8px; /* 第一行下方的间距 */
-  white-space: nowrap; /* 防止换行 */
-  overflow: hidden; /* 隐藏溢出 */
-  text-overflow: ellipsis; /* 如果文本过长，添加省略号 */
-}
-.issuer {
-  font-weight: bold;
-  font-size: 1.2em; /* 更大、更粗的发行者 */
-  color: #343a40;
-  margin-right: 8px; /* 发行者和名称之间的间距 */
-}
-.name {
-  font-size: 0.95em; /* 稍大的名称 */
-  color: #6c757d;
-}
-.code-line {
+.service-info {
   display: flex;
   align-items: center;
-  margin-top: 5px;
 }
-.code {
-  font-size: 2em; /* 更大的代码 */
+
+.service-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #4285F4;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5em;
   font-weight: bold;
-  color: #0d47a1; /* 深蓝色 */
-  letter-spacing: 2px; /* 字符间距 */
-  font-family: 'Courier New', Courier, monospace; /* 等宽字体 */
-  cursor: pointer; /* 指示可点击 */
-  padding: 2px 5px;
+  margin-right: 10px;
+}
+
+.service-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.server-name {
+  font-weight: bold;
+  font-size: 1.2em;
+}
+
+.account-name {
+  font-size: 0.9em;
+  color: #6c757d;
+}
+
+.time-counter {
+  display: flex;
+  align-items: center;
+}
+
+.progress-ring-wrapper {
+  position: relative;
+  width: 36px;
+  height: 36px;
+}
+
+.progress-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.progress-ring-bg {
+  fill: none;
+  stroke: #e0e0e0;
+  stroke-width: 2;
+}
+
+.progress-ring-circle {
+  fill: none;
+  stroke: #4285F4;
+  stroke-width: 2;
+  stroke-dasharray: 94.2; /* 2 * Math.PI * 15 */
+  transition: stroke-dashoffset 0.2s linear;
+}
+
+.time-left {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.85em;
+  font-weight: bold;
+  color: #4285F4;
+}
+
+.code-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.code, .hidden-code {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #0d47a1;
+  letter-spacing: 2px;
+  font-family: 'Courier New', Courier, monospace;
+  cursor: pointer;
+  padding: 5px 8px;
   border-radius: 4px;
+  background-color: #f8f9fa;
   transition: background-color 0.2s;
 }
-.code:hover {
-  background-color: rgba(66, 133, 244, 0.1); /* 淡蓝色背景 */
+
+.code:hover, .hidden-code:hover {
+  background-color: #e9ecef;
 }
-.code:active {
-  background-color: rgba(66, 133, 244, 0.2); /* 更深的背景 */
+
+.code-actions {
+  display: flex;
+  gap: 10px;
 }
-.hidden-code {
-  font-size: 2em; /* 保持一致大小 */
-  font-weight: bold;
-  color: #aaa; /* 灰色圆点 */
-  letter-spacing: 3px;
-  padding: 2px 5px;
-  cursor: pointer; /* 指示可点击 */
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-.hidden-code:hover {
-  background-color: rgba(66, 133, 244, 0.1); /* 淡蓝色背景 */
-}
-.hidden-code:active {
-  background-color: rgba(66, 133, 244, 0.2); /* 更深的背景 */
-}
-.toggle-code-btn {
+
+.action-button {
   background: none;
   border: none;
   cursor: pointer;
   color: #6c757d;
-  margin-left: 10px;
   padding: 5px;
   border-radius: 50%;
   display: flex;
@@ -697,117 +981,47 @@ const getProgressStyle = (timeLeft) => {
   justify-content: center;
   transition: all 0.2s ease;
 }
-.toggle-code-btn:hover {
+
+.action-button:hover {
   background-color: rgba(0, 0, 0, 0.05);
   color: #4285F4;
 }
-.toggle-code-btn.active {
+
+.action-button.active {
   color: #4285F4;
 }
 
-/* 进度条 */
-.progress-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px; /* 固定宽度 */
-  height: 40px; /* 固定高度 */
-  flex-shrink: 0; /* 防止容器缩小 */
-  position: relative; /* 用于内部的绝对定位 */
-  margin-left: 10px; /* 与左侧元素的间距 */
-}
-.progress-circle {
-  width: 36px; /* 圆的直径 */
-  height: 36px;
-  border-radius: 50%; /* 使其圆形 */
-  /* 背景通过 :style 动态设置 */
-  transition: background 0.1s linear; /* 平滑过渡计时器更新 */
-  display: flex; /* 居中内部内容 */
-  align-items: center;
-  justify-content: center;
-}
-.time-left {
-  font-size: 0.85em;
-  font-weight: bold;
-  color: #4285F4;
-}
-
-/* 底部 */
-.app-footer {
-  padding: 15px;
-  text-align: center;
-  border-top: 1px solid #dee2e6;
-  flex-shrink: 0;
-}
-
-.footer-buttons {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 20px; /* 按钮之间的间距 */
-}
-
-.toggle-all-button {
-  background-color: #f5f5f5;
-  border: none;
-  border-radius: 50%;
-  width: 45px;
-  height: 45px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-}
-
-.toggle-all-button:hover {
-  background-color: #e0e0e0;
-}
-
-.toggle-all-button.active {
-  color: #4285F4;
-  background-color: #e8f0fe;
-}
-
-.add-button {
+.copied-indicator {
+  position: absolute;
+  bottom: 5px;
+  right: 10px;
   background-color: #34A853;
   color: white;
-  border: none;
-  border-radius: 50%;
-  width: 50px;
-  height: 50px;
-  font-size: 2em;
-  line-height: 48px;
-  cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  transition: background-color 0.2s ease;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75em;
+  animation: fadeIn 0.3s ease;
 }
-.add-button:hover {
-  background-color: #2c8a44;
-}
-
-/* 移除旧的删除按钮样式（如果存在） */
-.delete-button { display: none; }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes popIn {
-  0% { transform: scale(0.8); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+/* 调整卡片样式以适应不同分辨率 */
+@media (max-width: 1200px) {
+  .account-card {
+    width: calc(50% - 10px);
+  }
 }
 
-/* 复制成功动画 */
-.copy-success {
-  animation: popIn 0.3s ease-out;
-}
-
-/* 复制时的视觉反馈样式 */
-.copy-active {
-  background-color: rgba(52, 168, 83, 0.15) !important;
-  box-shadow: 0 0 0 2px rgba(52, 168, 83, 0.4);
+@media (max-width: 800px) {
+  .account-card {
+    width: 100%;
+  }
+  
+  .sidebar {
+    width: 200px;
+  }
 }
 </style>
