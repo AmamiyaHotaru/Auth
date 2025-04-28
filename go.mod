@@ -2,13 +2,14 @@ module auth
 
 go 1.23.0
 
-toolchain go1.24.2
+
 
 require (
 	github.com/joho/godotenv v1.5.1
 	github.com/makiuchi-d/gozxing v0.1.1
 	github.com/pquerna/otp v1.4.0
 	github.com/wailsapp/wails/v2 v2.10.1
+	google.golang.org/protobuf v1.33.0
 	modernc.org/sqlite v1.37.0
 )
 
