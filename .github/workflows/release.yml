@@ -16,11 +16,33 @@ permissions:
   contents: write  # 这是创建发布和上传文件所需的权限
 
 jobs:
-  build-and-release:
+  # 手动触发时创建标签
+  create-tag:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # 获取完整历史以确保标签创建正确
+          
+      - name: Create Tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git tag -a ${{ github.event.inputs.version }} -m "Release ${{ github.event.inputs.version }}"
+          git push origin ${{ github.event.inputs.version }}
+        
+  # 创建发布
+  build-and-release:
+    needs: [create-tag]
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.version || github.ref_name }}
         
       - name: Create Release
         id: create_release
@@ -44,16 +66,45 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.23'
-          check-latest: true
+          go-version: '1.21'
+          check-latest: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      # 缓存 Go 模块
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~\AppData\Local\go-build
+            ~\go\pkg\mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # 缓存 Wails
+      - name: Cache Wails
+        id: cache-wails
+        uses: actions/cache@v3
+        with:
+          path: ~\go\bin\wails.exe
+          key: ${{ runner.os }}-wails-${{ hashFiles('go.mod') }}
 
       - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        if: steps.cache-wails.outputs.cache-hit != 'true'
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.7.1
+
+      # 安装前端依赖
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+        shell: powershell
 
       - name: Create .env file
         run: |
@@ -74,13 +125,13 @@ jobs:
           # 复制生成的可执行文件和资源
           cp -r build/bin/* release/
           # 创建 ZIP 文件
-          Compress-Archive -Path release/* -DestinationPath Euthenticator-windows-${{ github.ref_name }}.zip
+          Compress-Archive -Path release/* -DestinationPath Euthenticator-windows-${{ github.event.inputs.version || github.ref_name }}.zip
         shell: powershell
 
       - name: Upload Windows build
         uses: softprops/action-gh-release@v1
         with:
-          files: Euthenticator-windows-${{ github.ref_name }}.zip
+          files: Euthenticator-windows-${{ github.event.inputs.version || github.ref_name }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -94,21 +145,66 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.23'
-          check-latest: true
+          go-version: '1.21'
+          check-latest: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      # 缓存 Go 模块
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # 缓存 Wails
+      - name: Cache Wails
+        id: cache-wails
+        uses: actions/cache@v3
+        with:
+          path: ~/go/bin/wails
+          key: ${{ runner.os }}-wails-${{ hashFiles('go.mod') }}
 
       - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        if: steps.cache-wails.outputs.cache-hit != 'true'
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.7.1
+
+      # 缓存系统依赖
+      - name: Cache apt packages
+        uses: actions/cache@v3
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/release.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
 
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+          # 安装 WebKit2GTK 依赖和其他构建必需的包
+          sudo apt-get install -y build-essential libgtk-3-dev libglib2.0-dev
+          # 尝试安装 WebKit2GTK 4.1 (较新的 Ubuntu 版本)
+          sudo apt-get install -y libwebkit2gtk-4.1-dev
+          # 创建 webkit2gtk-4.0.pc 的符号链接指向 webkit2gtk-4.1.pc
+          # 这解决了 Wails 寻找 webkit2gtk-4.0 但系统只有 webkit2gtk-4.1 的问题
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc
+          # 安装其他可能需要的依赖
+          sudo apt-get install -y pkg-config
+
+      # 安装前端依赖
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
 
       - name: Create .env file
         run: |
@@ -130,11 +226,11 @@ jobs:
           # 复制生成的可执行文件和资源
           cp -r build/bin/* release/
           # 创建压缩文件
-          tar -czvf Euthenticator-linux-${{ github.ref_name }}.tar.gz -C release .
+          tar -czvf Euthenticator-linux-${{ github.event.inputs.version || github.ref_name }}.tar.gz -C release .
 
       - name: Upload Linux build
         uses: softprops/action-gh-release@v1
         with:
-          files: Euthenticator-linux-${{ github.ref_name }}.tar.gz
+          files: Euthenticator-linux-${{ github.event.inputs.version || github.ref_name }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
