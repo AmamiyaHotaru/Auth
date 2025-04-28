@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本'
+        required: true
+        default: 'v1.0.0'
 
 # 显式声明权限
 permissions:
@@ -20,7 +26,8 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          name: Release ${{ github.ref_name }}
+          name: Release ${{ github.event.inputs.version || github.ref_name }}
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true
