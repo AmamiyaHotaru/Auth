@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '发布版本'
+        description: '发布版本 (例如: v1.0.0)'
         required: true
         default: 'v1.0.0'
 
@@ -16,52 +16,69 @@ permissions:
   contents: write  # 这是创建发布和上传文件所需的权限
 
 jobs:
-  # 手动触发时创建标签
-  create-tag:
-    if: github.event_name == 'workflow_dispatch'
+  # 预处理任务 - 处理标签和设置正确的版本变量
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      VERSION: ${{ steps.set-version.outputs.VERSION }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0  # 获取完整历史以确保标签创建正确
-          
-      - name: Create Tag
+
+      # 处理手动触发时的标签创建
+      - name: Create Tag (Manual trigger only)
+        if: github.event_name == 'workflow_dispatch'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git tag -a ${{ github.event.inputs.version }} -m "Release ${{ github.event.inputs.version }}"
           git push origin ${{ github.event.inputs.version }}
         
+      # 设置统一的版本变量
+      - name: Set Version
+        id: set-version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            # 标签推送事件，从 ref 中提取版本
+            VERSION=${GITHUB_REF#refs/tags/}
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
   # 创建发布
-  build-and-release:
-    needs: [create-tag]
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+  create-release:
+    needs: prepare
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.inputs.version || github.ref_name }}
-        
-      - name: Create Release
-        id: create_release
+          ref: ${{ needs.prepare.outputs.VERSION }}
+          fetch-depth: 0
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          name: Release ${{ github.event.inputs.version || github.ref_name }}
-          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          name: Release ${{ needs.prepare.outputs.VERSION }}
+          tag_name: ${{ needs.prepare.outputs.VERSION }}
           draft: false
           prerelease: false
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Windows 构建
   build-windows:
-    needs: build-and-release
+    needs: [prepare, create-release]
     runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.prepare.outputs.VERSION }}
 
       - name: Setup Go
         uses: actions/setup-go@v3
@@ -125,22 +142,26 @@ jobs:
           # 复制生成的可执行文件和资源
           cp -r build/bin/* release/
           # 创建 ZIP 文件
-          Compress-Archive -Path release/* -DestinationPath Euthenticator-windows-${{ github.event.inputs.version || github.ref_name }}.zip
+          Compress-Archive -Path release/* -DestinationPath Euthenticator-windows-${{ needs.prepare.outputs.VERSION }}.zip
         shell: powershell
 
       - name: Upload Windows build
         uses: softprops/action-gh-release@v1
         with:
-          files: Euthenticator-windows-${{ github.event.inputs.version || github.ref_name }}.zip
+          tag_name: ${{ needs.prepare.outputs.VERSION }}
+          files: Euthenticator-windows-${{ needs.prepare.outputs.VERSION }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Linux 构建
   build-linux:
-    needs: build-and-release
+    needs: [prepare, create-release]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.prepare.outputs.VERSION }}
 
       - name: Setup Go
         uses: actions/setup-go@v3
@@ -208,7 +229,7 @@ jobs:
 
       - name: Create .env file
         run: |
-          echo "MASTER_PASSWORD=${{ secrets.MASTER_PASSWORD }}" > .env
+          echo "MASTER_PASSWORD='${{ secrets.MASTER_PASSWORD }}'" > .env
         shell: bash
 
       - name: Build for Linux
@@ -226,11 +247,12 @@ jobs:
           # 复制生成的可执行文件和资源
           cp -r build/bin/* release/
           # 创建压缩文件
-          tar -czvf Euthenticator-linux-${{ github.event.inputs.version || github.ref_name }}.tar.gz -C release .
+          tar -czvf Euthenticator-linux-${{ needs.prepare.outputs.VERSION }}.tar.gz -C release .
 
       - name: Upload Linux build
         uses: softprops/action-gh-release@v1
         with:
-          files: Euthenticator-linux-${{ github.event.inputs.version || github.ref_name }}.tar.gz
+          tag_name: ${{ needs.prepare.outputs.VERSION }}
+          files: Euthenticator-linux-${{ needs.prepare.outputs.VERSION }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
