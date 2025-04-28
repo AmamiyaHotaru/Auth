@@ -2,8 +2,6 @@ module auth
 
 go 1.23.0
 
-
-
 require (
 	github.com/joho/godotenv v1.5.1
 	github.com/makiuchi-d/gozxing v0.1.1

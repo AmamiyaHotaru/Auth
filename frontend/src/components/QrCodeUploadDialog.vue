@@ -191,7 +191,10 @@ function closeIfOverlay(event) {
           <div v-else class="spinner"></div>
           <p v-if="!isProcessing">拖放二维码图片到此处，或点击选择文件</p>
           <p v-else>正在处理二维码，请稍候...</p>
-          <p v-if="!isProcessing" class="upload-tip">支持粘贴上传，可以直接截图后 Ctrl+V 粘贴</p>
+          <p v-if="!isProcessing" class="upload-tip">
+            支持粘贴上传，可以直接截图后 Ctrl+V 粘贴<br>
+            <span class="support-note">支持谷歌身份验证器二维码导入</span>
+          </p>
         </div>
         
         <div v-if="errorMessage" class="error-message">
@@ -300,6 +303,13 @@ function closeIfOverlay(event) {
   font-size: 12px;
   color: #999;
   margin-top: 10px;
+}
+
+.support-note {
+  color: #4285F4;
+  font-weight: 500;
+  display: inline-block;
+  margin-top: 5px;
 }
 
 .error-message {
