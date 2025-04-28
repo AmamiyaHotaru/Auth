@@ -457,6 +457,10 @@ const getProgressStyle = (timeLeft) => {
   };
 };
 
+// 打开项目仓库链接
+function openGithubRepo() {
+  runtime.BrowserOpenURL("https://github.com/AmamiyaHotaru/Auth");
+}
 </script>
 
 <template>
@@ -722,7 +726,7 @@ const getProgressStyle = (timeLeft) => {
               </div>
               <div class="detail-content">
                 <div class="detail-label">项目仓库</div>
-                <a href="https://github.com/AmamiyaHotaru/Auth" target="_blank" class="detail-link">
+                <a @click.prevent="openGithubRepo" class="detail-link" style="cursor: pointer;">
                   github.com/AmamiyaHotaru/Auth
                 </a>
               </div>
