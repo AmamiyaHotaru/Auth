@@ -108,6 +108,9 @@ jobs:
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
+          # 尝试使用较新的包名
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev || \
+          # 如果不存在，回退到较旧的包名
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
 
       - name: Create .env file
