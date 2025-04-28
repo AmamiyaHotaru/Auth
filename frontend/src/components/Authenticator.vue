@@ -606,7 +606,7 @@ const getProgressStyle = (timeLeft) => {
               <div class="card-content">
                 <div class="account-header">
                   <div class="service-info">
-                    <div class="service-icon">{{ account.ServerName.charAt(0).toUpperCase() }}</div>
+                    <div class="service-icon">{{ account.ServerName && account.ServerName.length > 0 ? account.ServerName.charAt(0).toUpperCase() : account.AccountName.charAt(0).toUpperCase() }}</div>
                     <div class="service-details">
                       <span class="server-name">{{ account.ServerName }}</span>
                       <span class="account-name">{{ account.AccountName }}</span>
