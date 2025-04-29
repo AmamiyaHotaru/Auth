@@ -6,6 +6,7 @@ import ConfirmationDialog from './ConfirmationDialog.vue';
 import ManualEntryDialog from './ManualEntryDialog.vue';
 import AddOptionsMenu from './AddOptionsMenu.vue';
 import QrCodeUploadDialog from './QrCodeUploadDialog.vue';
+import Alert from './Alert.vue';
 
 // 导入模块化组件
 import TitleBar from './TitleBar.vue';
@@ -53,6 +54,9 @@ const qrCodeImageData = ref(null);
 
 // --- 关于按钮状态 ---
 const showAboutInfo = ref(false);
+
+// --- Alert 组件全局提示 ---
+const alertRef = ref(null);
 
 // --- 其他状态和变量 ---
 let timerInterval = null; // TOTP 计时器
@@ -183,8 +187,11 @@ async function deleteSelectedAccounts() {
     // 退出选择模式
     cancelSelectionMode();
     
+    if (alertRef.value) alertRef.value.show('success', '删除账户成功');
+    
   } catch (error) {
     console.error('删除账户失败:', error);
+    if (alertRef.value) alertRef.value.show('error', '删除账户失败');
   }
 }
 
@@ -195,7 +202,12 @@ function handleDeletionCancel() {
 
 // 编辑选中的账户
 function editSelectedAccount() {
-  if (selectedCount.value !== 1) return;
+  if (selectedCount.value !== 1) {
+    if (alertRef.value) {
+      alertRef.value.show('warning', '请只选择一个令牌进行编辑');
+    }
+    return;
+  }
   
   // 获取选中的账户ID
   const selectedId = [...selectedAccountIds.value][0];
@@ -337,8 +349,11 @@ async function handleManualAdd(formData) {
     // 关闭对话框
     showManualEntryDialog.value = false;
     
+    if (alertRef.value) alertRef.value.show('success', '添加账户成功');
+    
   } catch (error) {
     console.error('添加账户失败:', error);
+    if (alertRef.value) alertRef.value.show('error', '添加账户失败');
   }
 }
 
@@ -376,6 +391,8 @@ async function handleQrCodeDetected(data) {
     
     // 关闭对话框
     showQrCodeDialog.value = false;
+
+    if (alertRef.value) alertRef.value.show('success', '二维码解析并添加账户成功');
     
   } catch (error) {
     console.error('二维码识别失败:', error);
@@ -384,6 +401,8 @@ async function handleQrCodeDetected(data) {
     if (qrCodeDialogRef.value) {
       qrCodeDialogRef.value.setProcessingError(error);
     }
+
+    if (alertRef.value) alertRef.value.show('error', '二维码解析或添加账户失败');
     
     // 注意：不关闭对话框，让用户可以重试
   }
@@ -396,6 +415,7 @@ async function handleEditAccount(formData) {
     
     if (!formData.ID) {
       console.error('缺少账户ID，无法编辑');
+      if (alertRef.value) alertRef.value.show('error', '缺少账户ID，无法编辑');
       return;
     }
     
@@ -416,8 +436,11 @@ async function handleEditAccount(formData) {
     // 退出选择模式
     cancelSelectionMode();
     
+    if (alertRef.value) alertRef.value.show('success', '编辑账户成功');
+    
   } catch (error) {
     console.error('编辑账户失败:', error);
+    if (alertRef.value) alertRef.value.show('error', '编辑账户失败');
   }
 }
 
@@ -459,16 +482,27 @@ function startTimerInterval() {
   timerInterval = setInterval(handleTimerTick, 1000); // 每秒执行一次
 }
 
+// 禁止Tab切换焦点
+function handleTabKey(e) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    e.stopPropagation();
+    return false;
+  }
+}
+
 // --- 生命周期钩子 ---
 onMounted(async () => {
   console.log('组件已挂载，获取初始数据...');
   await getSecretsList(); // 获取初始数据
   startTimerInterval(); // 启动计时器
+  window.addEventListener('keydown', handleTabKey, true);
 });
 
 onUnmounted(() => {
   if (timerInterval) clearInterval(timerInterval); // 组件卸载时清除计时器
   clearTimeout(longPressTimer); // 清除可能存在的长按计时器
+  window.removeEventListener('keydown', handleTabKey, true);
 });
 </script>
 
@@ -521,7 +555,7 @@ onUnmounted(() => {
             <span class="selection-count">{{ selectedCount }} 项已选中</span>
           </div>
           <div class="header-right">
-            <button @click="editSelectedAccount" :disabled="selectedCount !== 1" class="toolbar-button">
+            <button @click="editSelectedAccount" :disabled="selectedCount !== 1" :class="['toolbar-button', { 'toolbar-button--disabled': selectedCount !== 1 }]">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
               </svg>
@@ -624,6 +658,9 @@ onUnmounted(() => {
       :show="showAboutInfo"
       @close="showAboutInfo = false"
     />
+
+    <!-- Alert 组件 -->
+    <Alert ref="alertRef" />
   </div>
 </template>
 
@@ -749,6 +786,15 @@ onUnmounted(() => {
 .toolbar-button.active {
   background-color: #e8f0fe;
   color: #4285F4;
+}
+
+.toolbar-button--disabled {
+  background-color: #e0e0e0 !important;
+  color: #bdbdbd !important;
+  cursor: not-allowed !important;
+  pointer-events: auto !important;
+  /* 保证即使禁用也能触发点击事件 */
+  opacity: 1 !important;
 }
 
 .button-icon {
