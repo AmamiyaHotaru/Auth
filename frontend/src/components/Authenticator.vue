@@ -9,16 +9,16 @@ import AddOptionsMenu from './AddOptionsMenu.vue';
 import QrCodeUploadDialog from './QrCodeUploadDialog.vue';
 
 // 导入模块化组件
-import TitleBar from './modules/TitleBar.vue';
-import SideBar from './modules/SideBar.vue';
-import AccountCard from './modules/AccountCard.vue';
-import AboutDialog from './modules/AboutDialog.vue';
+import TitleBar from './TitleBar.vue';
+import SideBar from './SideBar.vue';
+import AccountCard from './AccountCard.vue';
+import AboutDialog from './AboutDialog.vue';
 
 // 导入服务
-import * as accountService from './modules/accountService.js';
-import * as timerService from './modules/timerService.js';
-import * as codeUtils from './modules/codeUtils.js';
-import * as selectionModeService from './modules/selectionMode.js';
+import * as accountService from './accountService.js';
+import * as timerService from './timerService.js';
+import * as codeUtils from './codeUtils.js';
+import * as selectionModeService from './selectionMode.js';
 
 // --- 状态 ---
 const accounts = ref([]);

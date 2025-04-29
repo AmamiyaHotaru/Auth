@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue';
-import * as runtime from "../../../wailsjs/runtime/runtime";
+import * as runtime from "../../wailsjs/runtime/runtime";
 
 // 窗口状态
 const isMaximized = ref(false);

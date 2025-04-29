@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import * as runtime from "../../../wailsjs/runtime/runtime";
+import * as runtime from "../../wailsjs/runtime/runtime";
 
 // 定义props
 const props = defineProps({
@@ -28,7 +28,7 @@ function showAbout() {
   <aside class="sidebar">
     <div class="sidebar-header">
       <div class="app-logo">
-        <img src="../../assets/images/logo-universal.png" alt="Euthenticator" class="logo-image">
+        <img src="../assets/images/logo-universal.png" alt="Euthenticator" class="logo-image">
       </div>
       <h1 class="app-title">Euthenticator</h1>
     </div>

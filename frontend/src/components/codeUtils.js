@@ -1,4 +1,4 @@
-import * as runtime from "../../../wailsjs/runtime/runtime";
+import * as runtime from "../../wailsjs/runtime/runtime";
 
 // 格式化验证码为 3-3 格式
 export const formatCode = (code) => {
