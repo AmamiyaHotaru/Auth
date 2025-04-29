@@ -1,6 +1,5 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import * as runtime from "../../wailsjs/runtime/runtime";
 
 // 导入组件
 import ConfirmationDialog from './ConfirmationDialog.vue';
@@ -99,7 +98,7 @@ async function copyCodeToClipboard(code, accountId, event) {
     targetElement.classList.remove('copy-active');
   }, 500);
   
-  console.log('复制验证码:', code);
+ 
   const success = await codeUtils.copyToClipboard(code);
   console.log('复制结果:', success);
   
@@ -266,11 +265,11 @@ function handleItemClick(account) {
 
 // 显示添加选项菜单
 function showAddOptionsMenu(event) {
-  console.log('点击了添加账户按钮', event);
+
   
   // 计算按钮位置
   const rect = event.currentTarget.getBoundingClientRect();
-  console.log('按钮位置:', rect);
+
   
   // 阻止事件冒泡，防止菜单立即关闭
   event.stopPropagation();
@@ -294,11 +293,11 @@ function showAddOptionsMenu(event) {
     left: left,
     top: rect.bottom + 5 // 添加5px的间距
   };
-  
-  console.log('设置菜单位置:', addButtonPosition.value);
+
+
   // 显示菜单
   showAddOptions.value = true;
-  console.log('已设置showAddOptions为:', showAddOptions.value);
+
 }
 
 // 处理添加选项选择
