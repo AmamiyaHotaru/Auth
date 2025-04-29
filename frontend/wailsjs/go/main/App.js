@@ -17,3 +17,7 @@ export function InsertSecret(arg1, arg2, arg3, arg4) {
 export function RecognizeQRCode(arg1) {
   return window['go']['main']['App']['RecognizeQRCode'](arg1);
 }
+
+export function UpdateSecret(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateSecret'](arg1, arg2, arg3, arg4);
+}

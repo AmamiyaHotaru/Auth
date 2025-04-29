@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	_ "modernc.org/sqlite"
 	"strings"
+
+	_ "modernc.org/sqlite"
 )
 
 var DB *sql.DB
@@ -78,7 +79,7 @@ func GetSecretsList() ([]model.Secret, error) {
 	return secrets, nil
 }
 
-func DeleteSecret(ids []uint) error {
+func DeleteSecret(ids []int) error {
 	if DB == nil {
 		return sql.ErrConnDone // 数据库未初始化
 	}
@@ -103,4 +104,16 @@ func DeleteSecret(ids []uint) error {
 	}
 
 	return nil
+}
+
+func UpdateSecret(id int, accountName string, serverName string, accountType int) error {
+	_, err := DB.Exec("UPDATE secret SET account_name = ?, server_name = ?, account_type = ? WHERE id = ?", accountName, serverName, accountType, id)
+
+	if err != nil {
+		log.Printf("编辑失败: %v\n", err)
+		return err
+	}
+
+	return nil
+
 }

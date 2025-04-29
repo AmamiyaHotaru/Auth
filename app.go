@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/pquerna/otp"
 	"image"
 	_ "image/gif"  // 支持GIF格式
 	_ "image/jpeg" // 支持JPEG格式
@@ -16,7 +15,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pquerna/otp"
+
 	gotp "auth/utils/otp_extractor"
+
 	"github.com/makiuchi-d/gozxing"
 	"github.com/makiuchi-d/gozxing/qrcode"
 	"github.com/pquerna/otp/totp"
@@ -98,7 +100,7 @@ func (a *App) InsertSecret(accountName string, serverName string, secret string,
 
 }
 
-func (a *App) DeleteSecret(ids []uint) error {
+func (a *App) DeleteSecret(ids []int) error {
 	err := db.DeleteSecret(ids)
 	if err != nil {
 		log.Println("删除失败", err)
@@ -183,4 +185,13 @@ func (a *App) RecognizeQRCode(imgBytes []byte) error {
 	}
 
 	return nil
+}
+
+func (a *App) UpdateSecret(id int, accountName string, serverName string, accountType int) error {
+	err := db.UpdateSecret(id, accountName, serverName, accountType)
+	if err != nil {
+		log.Println("编辑失败", err)
+	}
+	return nil
+
 }

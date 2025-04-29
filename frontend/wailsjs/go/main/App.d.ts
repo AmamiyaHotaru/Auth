@@ -9,3 +9,5 @@ export function GetSecretsList():Promise<Array<model.Secret>>;
 export function InsertSecret(arg1:string,arg2:string,arg3:string,arg4:number):Promise<void>;
 
 export function RecognizeQRCode(arg1:Array<number>):Promise<void>;
+
+export function UpdateSecret(arg1:number,arg2:string,arg3:string,arg4:number):Promise<void>;
