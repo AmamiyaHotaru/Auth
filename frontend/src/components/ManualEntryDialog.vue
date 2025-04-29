@@ -1,8 +1,22 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 const props = defineProps({
-  show: Boolean
+  show: Boolean,
+  isEditing: {
+    type: Boolean,
+    default: false
+  },
+  accountData: {
+    type: Object,
+    default: () => ({
+      ID: null,
+      accountName: '',
+      serverName: '',
+      secret: '',
+      accountType: 0
+    })
+  }
 });
 
 const emit = defineEmits(['confirm', 'cancel']);
@@ -15,6 +29,16 @@ const accountType = ref(0); // 默认为 TOTP 类型 (0)
 
 // 验证状态
 const formError = ref('');
+
+// 监听外部传入的账户数据变化
+watch(() => props.accountData, (newData) => {
+  if (props.show && props.isEditing && newData) {
+    accountName.value = newData.AccountName || '';
+    serverName.value = newData.ServerName || '';
+    secret.value = newData.Secret || '';
+    accountType.value = newData.AccountType || 0;
+  }
+}, { immediate: true });
 
 // 处理表单提交
 function handleSubmit() {
@@ -29,13 +53,15 @@ function handleSubmit() {
     return;
   }
   
-  if (!secret.value.trim()) {
+  // 在编辑模式下跳过密钥验证
+  if (!props.isEditing && !secret.value.trim()) {
     formError.value = '请输入密钥';
     return;
   }
   
   // 提交数据
   emit('confirm', {
+    ID: props.accountData?.ID, // 如果是编辑模式，传递ID
     accountName: accountName.value.trim(),
     serverName: serverName.value.trim(),
     secret: secret.value.trim(),
@@ -67,7 +93,7 @@ function resetForm() {
   <div v-if="show" class="dialog-overlay">
     <div class="dialog-container">
       <div class="dialog-header">
-        <h3>手动添加账户</h3>
+        <h3>{{ isEditing ? '编辑账户' : '手动添加账户' }}</h3>
       </div>
       
       <div class="dialog-body">
@@ -101,7 +127,12 @@ function resetForm() {
             id="secret" 
             v-model="secret"
             placeholder="请输入密钥字符串"
+            :disabled="isEditing"
+            :value="secret"
           />
+          <div v-if="isEditing" class="secret-info">
+            编辑模式下不允许修改密钥
+          </div>
         </div>
         
         <div class="form-group">
@@ -115,7 +146,7 @@ function resetForm() {
       
       <div class="dialog-footer">
         <button @click="handleCancel" class="btn-cancel">取消</button>
-        <button @click="handleSubmit" class="btn-confirm">添加</button>
+        <button @click="handleSubmit" class="btn-confirm">{{ isEditing ? '保存' : '添加' }}</button>
       </div>
     </div>
   </div>
@@ -234,5 +265,12 @@ function resetForm() {
 
 .btn-confirm:hover {
   background-color: #3b78e7;
+}
+
+.secret-info {
+  color: #6c757d;
+  font-size: 0.8em;
+  margin-top: 5px;
+  font-style: italic;
 }
 </style>

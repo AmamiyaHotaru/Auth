@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, onUnmounted, nextTick } from 'vue';
-import { GetSecretsList, InsertSecret, DeleteSecret, RecognizeQRCode } from '../../wailsjs/go/main/App';
+import { GetSecretsList, InsertSecret, DeleteSecret, RecognizeQRCode, UpdateSecret } from '../../wailsjs/go/main/App';
 import ConfirmationDialog from './ConfirmationDialog.vue';
 import ManualEntryDialog from './ManualEntryDialog.vue';
 import AddOptionsMenu from './AddOptionsMenu.vue';
@@ -15,6 +15,10 @@ const visibleCodes = ref(new Set());
 const copiedCodes = ref(new Set());
 // 全局显示/隐藏所有验证码的状态
 const showAllCodes = ref(false);
+
+// 编辑对话框状态
+const showEditDialog = ref(false);
+const editingAccount = ref(null);
 
 // 显示或隐藏验证码
 function toggleCodeVisibility(accountId, event) {
@@ -271,6 +275,67 @@ async function deleteSelectedAccounts() {
 // 处理取消删除操作
 function handleDeletionCancel() {
     showDeleteConfirmation.value = false;
+}
+
+// --- 编辑逻辑 ---
+// 请求编辑选中的账户
+function editSelectedAccount() {
+  if (selectedAccountIds.value.size !== 1) {
+    console.log('编辑功能只能选择一个账户');
+    return;
+  }
+  
+  // 获取选中的账户ID
+  const accountId = Array.from(selectedAccountIds.value)[0];
+  
+  // 查找选中的账户数据
+  const accountToEdit = accounts.value.find(acc => acc.ID === accountId);
+  
+  if (accountToEdit) {
+    // 设置编辑状态和数据
+    editingAccount.value = accountToEdit;
+    showEditDialog.value = true;
+  } else {
+    console.error('未找到选中的账户数据');
+  }
+}
+
+// 处理账户编辑保存
+async function handleEditAccount(formData) {
+  try {
+    console.log('编辑账户数据:', formData);
+    
+    if (!formData.ID) {
+      console.error('缺少账户ID，无法编辑');
+      return;
+    }
+    
+    // 调用Go后端更新账户，不再传递秘钥参数
+    await UpdateSecret(
+      formData.ID,
+      formData.accountName, 
+      formData.serverName, 
+      formData.accountType
+    );
+    
+    // 刷新账户列表
+    await getSecretsList();
+    
+    // 关闭编辑对话框
+    closeEditDialog();
+    
+    // 退出选择模式
+    cancelSelectionMode();
+    
+  } catch (error) {
+    console.error('编辑账户失败:', error);
+  }
+}
+
+// 关闭编辑对话框
+function closeEditDialog() {
+  showEditDialog.value = false;
+  editingAccount.value = null;
 }
 
 // --- 添加账户相关逻辑 ---
@@ -564,6 +629,13 @@ function openGithubRepo() {
             <span class="selection-count">{{ selectedCount }} 项已选中</span>
           </div>
           <div class="header-right">
+            <button @click="editSelectedAccount" :disabled="selectedCount !== 1" class="toolbar-button">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+              </svg>
+              <span class="button-label">编辑选中</span>
+            </button>
             <button @click="requestDeleteSelected" :disabled="selectedCount === 0" class="toolbar-button danger-button">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="3 6 5 6 21 6"></polyline>
@@ -696,6 +768,16 @@ function openGithubRepo() {
       confirmText="删除"
       @confirm="deleteSelectedAccounts"
       @cancel="handleDeletionCancel"
+    />
+
+    <!-- 编辑对话框 -->
+    <ManualEntryDialog
+      v-if="showEditDialog"
+      :show="showEditDialog"
+      :isEditing="true"
+      :accountData="editingAccount"
+      @confirm="handleEditAccount"
+      @cancel="closeEditDialog"
     />
 
     <!-- 关于信息弹窗 -->
