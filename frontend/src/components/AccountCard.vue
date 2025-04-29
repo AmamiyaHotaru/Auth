@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import * as runtime from "../../../wailsjs/runtime/runtime";
+import * as runtime from "../../wailsjs/runtime/runtime";
 
 // 定义props
 const props = defineProps({

@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import * as runtime from "../../../wailsjs/runtime/runtime";
+import * as runtime from "../../wailsjs/runtime/runtime";
 
 // 定义props
 const props = defineProps({
@@ -33,7 +33,7 @@ function openGithubRepo() {
       </div>
       <div class="about-dialog-body">
         <div class="about-logo">
-          <img src="../../assets/images/logo-universal.png" alt="Euthenticator" class="about-logo-image">
+          <img src="../assets/images/logo-universal.png" alt="Euthenticator" class="about-logo-image">
         </div>
         <div class="about-version">
           <span class="version-label">版本</span>

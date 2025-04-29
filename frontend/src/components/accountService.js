@@ -1,4 +1,4 @@
-import { GetSecretsList, InsertSecret, DeleteSecret, RecognizeQRCode, UpdateSecret } from '../../../wailsjs/go/main/App';
+import { GetSecretsList, InsertSecret, DeleteSecret, RecognizeQRCode, UpdateSecret } from '../../wailsjs/go/main/App';
 
 // 获取账户列表
 export const getSecretsList = async () => {
