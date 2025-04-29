@@ -126,7 +126,7 @@ function resetForm() {
             type="text" 
             id="secret" 
             v-model="secret"
-            placeholder="请输入密钥字符串"
+            :placeholder="isEditing ? '*************' : '请输入密钥字符串'"
             :disabled="isEditing"
             :value="secret"
           />
